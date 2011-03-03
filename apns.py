@@ -1,9 +1,27 @@
 from datetime import datetime
 from socket import socket, AF_INET, SOCK_STREAM
 from struct import pack, unpack
-import ssl
-
 import simplejson
+
+try:
+    from ssl import wrap_socket
+    def _connect_ssl(server, port, key_file, cert_file):
+        _socket = socket(AF_INET, SOCK_STREAM)                                                                                
+        _ssl = wrap_socket(
+            _socket,
+            keyfile=key_file,
+            certfile=cert_file,
+        )
+        _ssl.connect((server, port))
+        return _socket, _ssl
+except:
+    from socket import ssl
+    def _connect_ssl(server, port, key_file, cert_file):
+        _socket = socket(AF_INET, SOCK_STREAM)
+        _socket.connect((server, port))
+        _ssl = ssl(_socket, key_file, cert_file)
+        return _socket, _ssl
+
 
 MAX_PAYLOAD_LENGTH = 256
 
@@ -107,24 +125,23 @@ class APNsConnection(object):
         super(APNsConnection, self).__init__()
         self.cert_file  = cert_file
         self.key_file   = key_file
+        self._socket    = None
         self._ssl       = None
     
     def __del__(self):
         self._disconnect();
     
     def _connect(self):
-        # Establish an SSL connection                                                                                   
-        s = socket(AF_INET, SOCK_STREAM)                                                                                
-        self._ssl = ssl.wrap_socket(                                                                                    
-            s,                                                                                                          
-            keyfile=self.key_file,                                                                                      
-            certfile=self.cert_file,                                                                                    
-        )                                                                                                               
-        self._ssl.connect((self.server, self.port))                                                                     
+        self._socket, self._ssl = _connect_ssl(
+            self.server,
+            self.port,
+            self.key_file,
+            self.cert_file,
+        )
     
     def _disconnect(self):
-        if self._ssl:
-            self._ssl.close()
+        if self._socket:
+            self._socket.close()
     
     def _connection(self):
         if not self._ssl:
